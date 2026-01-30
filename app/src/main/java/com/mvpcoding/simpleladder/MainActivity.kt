@@ -1,6 +1,7 @@
 package com.mvpcoding.simpleladder
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,8 +19,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -41,11 +40,16 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var rewardedAd: RewardedAd? = null
+    private var isAdLoading = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        MobileAds.initialize(this) {}
-        loadRewardedAd()
+        
+        // AdMob 초기화
+        MobileAds.initialize(this) { initializationStatus ->
+            Log.d("AdMob", "Initialization complete: $initializationStatus")
+            loadRewardedAd()
+        }
 
         setContent {
             MaterialTheme {
@@ -61,10 +65,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadRewardedAd() {
+        if (isAdLoading || rewardedAd != null) return
+        
+        isAdLoading = true
         val adRequest = AdRequest.Builder().build()
+        
+        // 구글 공식 테스트 보상형 광고 ID
         RewardedAd.load(this, "ca-app-pub-3940256099942544/5224354917", adRequest, object : RewardedAdLoadCallback() {
-            override fun onAdFailedToLoad(adError: LoadAdError) { rewardedAd = null }
-            override fun onAdLoaded(ad: RewardedAd) { rewardedAd = ad }
+            override fun onAdFailedToLoad(adError: LoadAdError) {
+                Log.e("AdMob", "Ad failed to load: ${adError.message}")
+                rewardedAd = null
+                isAdLoading = false
+            }
+
+            override fun onAdLoaded(ad: RewardedAd) {
+                Log.d("AdMob", "Ad loaded successfully")
+                rewardedAd = ad
+                isAdLoading = false
+            }
         })
     }
 
@@ -72,11 +90,19 @@ class MainActivity : ComponentActivity() {
         rewardedAd?.let { ad ->
             ad.show(this) {
                 onRewardEarned()
-                loadRewardedAd()
+                rewardedAd = null
+                loadRewardedAd() // 시청 후 다음 광고 미리 로드
             }
         } ?: run {
-            Toast.makeText(this, "광고 준비 중 / Ad not ready", Toast.LENGTH_SHORT).show()
-            loadRewardedAd()
+            if (isAdLoading) {
+                Toast.makeText(this, "광고를 불러오는 중입니다. 잠시 후 다시 눌러주세요.", Toast.LENGTH_SHORT).show()
+            } else {
+                // 광고 로드에 실패했거나 없는 경우, 게임 진행을 위해 바로 실행
+                // 실제 배포 시에는 더 엄격하게 관리할 수 있습니다.
+                Log.d("AdMob", "Ad not ready, skipping to game.")
+                onRewardEarned()
+                loadRewardedAd()
+            }
         }
     }
 }
@@ -93,8 +119,6 @@ class Translation(val lang: Language) {
     val reset = if (lang == Language.KR) "초기화" else "Reset"
     val selectStart = if (lang == Language.KR) "출발 번호 선택" else "Select Start"
     val start = if (lang == Language.KR) "시작" else "Start"
-    val adTitle = if (lang == Language.KR) "광고를 보면 창이 사라집니다." else "Watch ad to reveal ladder."
-    val adBody = if (lang == Language.KR) "(이곳을 클릭하여 광고 시청)" else "(Click here to watch ad)"
     val statusIdle = if (lang == Language.KR) "출발 번호를 선택하고 '시작'을 누르세요" else "Select a number and press 'Start'"
     val statusAnimating = if (lang == Language.KR) "사다리 타는 중..." else "Climbing..."
     val resultPrefix = if (lang == Language.KR) "결과: " else "Result: "
@@ -110,7 +134,6 @@ data class TracePoint(val xLine: Int, val yIndex: Int)
 
 @Composable
 fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
-    // 언어 관련 상태
     var language by remember { mutableStateOf(Language.KR) }
     val t = remember(language) { Translation(language) }
     var showSettings by remember { mutableStateOf(false) }
@@ -120,7 +143,7 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
     var loserCount by remember { mutableIntStateOf(3) }
 
     var players by remember { mutableStateOf(listOf<String>()) }
-    var mapping by remember { mutableStateOf(listOf<Pair<String, String>>()) } // Pair(참가자, 결과Key)
+    var mapping by remember { mutableStateOf(listOf<Pair<String, String>>()) }
 
     var rungs by remember { mutableStateOf(listOf<LadderRung>()) }
     var levels by remember { mutableIntStateOf(20) }
@@ -130,7 +153,6 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
     var animT by remember { mutableFloatStateOf(0f) }
     var isAnimating by remember { mutableStateOf(false) }
     var finalLineIndex by remember { mutableIntStateOf(-1) }
-    var showAdPopup by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
@@ -161,7 +183,6 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
         modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 제목 및 설정 버튼
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(t.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = { showSettings = true }) {
@@ -169,7 +190,6 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
             }
         }
 
-        // 설정 카드
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 CounterRow(t.totalPlayers, playerCount, 2, 12) { playerCount = it }
@@ -180,26 +200,26 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(modifier = Modifier.weight(1f), onClick = {
-                val p = (1..playerCount).map { it.toString() }
-                val res = mutableListOf<String>()
-                repeat(winnerCount) { res.add("WIN") }
-                repeat(loserCount) { res.add("LOSE") }
-                repeat(playerCount - winnerCount - loserCount) { res.add("-") }
-                players = p
-                mapping = p.zip(res.shuffled(Random(System.currentTimeMillis())))
-                rungs = generateRungs(p.size, levels, 0.7f, System.currentTimeMillis())
-                selectedPlayerIndex = 0
-                trace = emptyList()
-                animT = 0f
-                finalLineIndex = -1
-                showAdPopup = true
+                onShowAd {
+                    val p = (1..playerCount).map { it.toString() }
+                    val res = mutableListOf<String>()
+                    repeat(winnerCount) { res.add("WIN") }
+                    repeat(loserCount) { res.add("LOSE") }
+                    repeat(playerCount - winnerCount - loserCount) { res.add("-") }
+                    players = p
+                    mapping = p.zip(res.shuffled(Random(System.currentTimeMillis())))
+                    rungs = generateRungs(p.size, levels, 0.7f, System.currentTimeMillis())
+                    selectedPlayerIndex = 0
+                    trace = emptyList()
+                    animT = 0f
+                    finalLineIndex = -1
+                }
             }) { Text(t.createLadder) }
 
             OutlinedButton(modifier = Modifier.weight(1f), onClick = {
                 players = emptyList()
                 mapping = emptyList()
                 finalLineIndex = -1
-                showAdPopup = false
             }) { Text(t.reset) }
         }
 
@@ -221,7 +241,6 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
                 scope.launch { playAnimation(tr, end) }
             }) { Text(t.start) }
 
-            // 사다리 영역
             LadderGameArea(
                 modifier = Modifier.height(360.dp).fillMaxWidth(),
                 players = players,
@@ -230,13 +249,9 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
                 levels = levels,
                 trace = trace,
                 animT = animT,
-                highlightPath = isAnimating || finalLineIndex >= 0,
-                showAdPopup = showAdPopup,
-                onWatchAdClick = { onShowAd { showAdPopup = false } },
-                translation = t
+                highlightPath = isAnimating || finalLineIndex >= 0
             )
 
-            // 결과창
             Card(modifier = Modifier.fillMaxWidth().height(80.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                     val statusText = when {
@@ -254,7 +269,6 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
         }
     }
 
-    // 설정 다이얼로그
     if (showSettings) {
         AlertDialog(
             onDismissRequest = { showSettings = false },
@@ -301,10 +315,7 @@ fun LadderGameArea(
     levels: Int,
     trace: List<TracePoint>,
     animT: Float,
-    highlightPath: Boolean,
-    showAdPopup: Boolean,
-    onWatchAdClick: () -> Unit,
-    translation: Translation
+    highlightPath: Boolean
 ) {
     Card(modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -328,19 +339,6 @@ fun LadderGameArea(
                 }
                 Row(modifier = Modifier.fillMaxWidth().height(30.dp)) {
                     results.forEach { Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(it, fontSize = 10.sp, fontWeight = FontWeight.Medium) } }
-                }
-            }
-            if (showAdPopup) {
-                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.05f)).clickable { onWatchAdClick() }, contentAlignment = Alignment.Center) {
-                    Card(modifier = Modifier.fillMaxWidth(1f).fillMaxHeight(0.5f), shape = RectangleShape) {
-                        Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.height(16.dp))
-                            Text(translation.adTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
-                            Spacer(Modifier.height(8.dp))
-                            Text(translation.adBody, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-                        }
-                    }
                 }
             }
         }
