@@ -46,10 +46,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         // AdMob 초기화
-        MobileAds.initialize(this) { initializationStatus ->
-            Log.d("AdMob", "Initialization complete: $initializationStatus")
-            loadRewardedAd()
-        }
+        MobileAds.initialize(this) { loadRewardedAd() }
 
         setContent {
             MaterialTheme {
@@ -66,20 +63,14 @@ class MainActivity : ComponentActivity() {
 
     private fun loadRewardedAd() {
         if (isAdLoading || rewardedAd != null) return
-        
         isAdLoading = true
         val adRequest = AdRequest.Builder().build()
-        
-        // 구글 공식 테스트 보상형 광고 ID
         RewardedAd.load(this, "ca-app-pub-3940256099942544/5224354917", adRequest, object : RewardedAdLoadCallback() {
             override fun onAdFailedToLoad(adError: LoadAdError) {
-                Log.e("AdMob", "Ad failed to load: ${adError.message}")
                 rewardedAd = null
                 isAdLoading = false
             }
-
             override fun onAdLoaded(ad: RewardedAd) {
-                Log.d("AdMob", "Ad loaded successfully")
                 rewardedAd = ad
                 isAdLoading = false
             }
@@ -91,23 +82,15 @@ class MainActivity : ComponentActivity() {
             ad.show(this) {
                 onRewardEarned()
                 rewardedAd = null
-                loadRewardedAd() // 시청 후 다음 광고 미리 로드
-            }
-        } ?: run {
-            if (isAdLoading) {
-                Toast.makeText(this, "광고를 불러오는 중입니다. 잠시 후 다시 눌러주세요.", Toast.LENGTH_SHORT).show()
-            } else {
-                // 광고 로드에 실패했거나 없는 경우, 게임 진행을 위해 바로 실행
-                // 실제 배포 시에는 더 엄격하게 관리할 수 있습니다.
-                Log.d("AdMob", "Ad not ready, skipping to game.")
-                onRewardEarned()
                 loadRewardedAd()
             }
+        } ?: run {
+            onRewardEarned() // 광고 없으면 그냥 통과
+            loadRewardedAd()
         }
     }
 }
 
-// --- 다국어 지원 시스템 ---
 enum class Language { KR, EN }
 
 class Translation(val lang: Language) {
@@ -126,6 +109,7 @@ class Translation(val lang: Language) {
     val lose = if (lang == Language.KR) "꽝" else "LOSE"
     val settings = if (lang == Language.KR) "설정" else "Settings"
     val selectLang = if (lang == Language.KR) "언어 선택" else "Language"
+    val versionInfo = if (lang == Language.KR) "버전 정보" else "Version Info"
     val close = if (lang == Language.KR) "닫기" else "Close"
 }
 
@@ -146,7 +130,7 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
     var mapping by remember { mutableStateOf(listOf<Pair<String, String>>()) }
 
     var rungs by remember { mutableStateOf(listOf<LadderRung>()) }
-    var levels by remember { mutableIntStateOf(20) }
+    val levels = 20
     var selectedPlayerIndex by remember { mutableIntStateOf(0) }
 
     var trace by remember { mutableStateOf(listOf<TracePoint>()) }
@@ -275,6 +259,10 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
             title = { Text(t.settings) },
             text = {
                 Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(t.versionInfo, style = MaterialTheme.typography.labelMedium)
+                    Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(t.selectLang, style = MaterialTheme.typography.labelMedium)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = language == Language.KR, onClick = { language = Language.KR })

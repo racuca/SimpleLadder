@@ -32,6 +32,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // BuildConfig 활성화
     }
 }
 
