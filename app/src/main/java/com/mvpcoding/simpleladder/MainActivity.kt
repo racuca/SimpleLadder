@@ -1,7 +1,6 @@
 package com.mvpcoding.simpleladder
 
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,7 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,35 +24,38 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
-import com.google.android.gms.ads.rewarded.RewardedAd
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import kotlin.random.Random
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private var rewardedAd: RewardedAd? = null
+    private var interstitialAd: InterstitialAd? = null
     private var isAdLoading = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         // AdMob 초기화
-        MobileAds.initialize(this) { loadRewardedAd() }
+        MobileAds.initialize(this) { loadInterstitialAd() }
 
         setContent {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     LadderGameStage2Screen(
-                        onShowAd = { onRewardEarned ->
-                            showRewardedAd(onRewardEarned)
+                        onShowAd = { onAdClosed ->
+                            showInterstitialAd(onAdClosed)
                         }
                     )
                 }
@@ -61,43 +63,53 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun loadRewardedAd() {
-        if (isAdLoading || rewardedAd != null) return
+    private fun loadInterstitialAd() {
+        if (isAdLoading || interstitialAd != null) return
         isAdLoading = true
         val adRequest = AdRequest.Builder().build()
-        RewardedAd.load(this, "ca-app-pub-3940256099942544/5224354917", adRequest, object : RewardedAdLoadCallback() {
+        
+        // 구글 공식 테스트 전면광고 ID
+        InterstitialAd.load(this, "ca-app-pub-8469540863370531/8151805108", adRequest, object : InterstitialAdLoadCallback() {
             override fun onAdFailedToLoad(adError: LoadAdError) {
-                rewardedAd = null
+                interstitialAd = null
                 isAdLoading = false
             }
-            override fun onAdLoaded(ad: RewardedAd) {
-                rewardedAd = ad
+            override fun onAdLoaded(ad: InterstitialAd) {
+                interstitialAd = ad
                 isAdLoading = false
             }
         })
     }
 
-    private fun showRewardedAd(onRewardEarned: () -> Unit) {
-        rewardedAd?.let { ad ->
-            ad.show(this) {
-                onRewardEarned()
-                rewardedAd = null
-                loadRewardedAd()
+    private fun showInterstitialAd(onAdClosed: () -> Unit) {
+        interstitialAd?.let { ad ->
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    onAdClosed()
+                    interstitialAd = null
+                    loadInterstitialAd()
+                }
+                override fun onAdFailedToShowFullScreenContent(p0: AdError) {
+                    onAdClosed()
+                    interstitialAd = null
+                    loadInterstitialAd()
+                }
             }
+            ad.show(this)
         } ?: run {
-            onRewardEarned() // 광고 없으면 그냥 통과
-            loadRewardedAd()
+            onAdClosed()
+            loadInterstitialAd()
         }
     }
 }
 
 enum class Language { KR, EN }
 
-class Translation(val lang: Language) {
+class Translation(lang: Language) {
     val title = if (lang == Language.KR) "사다리게임" else "Ladder Game"
     val totalPlayers = if (lang == Language.KR) "총 인원(최대12명)" else "Total Players (Max 12)"
-    val winners = if (lang == Language.KR) "당첨 수" else "Winners"
-    val losers = if (lang == Language.KR) "꽝 수" else "Losers"
+    val resultSettings = if (lang == Language.KR) "결과 항목 설정" else "Result Settings"
+    val addResult = if (lang == Language.KR) "항목 추가" else "Add Item"
     val createLadder = if (lang == Language.KR) "사다리 생성" else "Create"
     val reset = if (lang == Language.KR) "초기화" else "Reset"
     val selectStart = if (lang == Language.KR) "출발 번호 선택" else "Select Start"
@@ -105,14 +117,14 @@ class Translation(val lang: Language) {
     val statusIdle = if (lang == Language.KR) "출발 번호를 선택하고 '시작'을 누르세요" else "Select a number and press 'Start'"
     val statusAnimating = if (lang == Language.KR) "사다리 타는 중..." else "Climbing..."
     val resultPrefix = if (lang == Language.KR) "결과: " else "Result: "
-    val win = if (lang == Language.KR) "당첨" else "WIN"
-    val lose = if (lang == Language.KR) "꽝" else "LOSE"
     val settings = if (lang == Language.KR) "설정" else "Settings"
     val selectLang = if (lang == Language.KR) "언어 선택" else "Language"
     val versionInfo = if (lang == Language.KR) "버전 정보" else "Version Info"
     val close = if (lang == Language.KR) "닫기" else "Close"
+    val inputPlaceholder = if (lang == Language.KR) "결과 입력" else "Enter result"
 }
 
+data class ResultEntry(val id: Long, val name: String, val count: Int)
 data class LadderRung(val yIndex: Int, val leftLine: Int)
 data class TracePoint(val xLine: Int, val yIndex: Int)
 
@@ -123,8 +135,12 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
     var showSettings by remember { mutableStateOf(false) }
 
     var playerCount by remember { mutableIntStateOf(4) }
-    var winnerCount by remember { mutableIntStateOf(1) }
-    var loserCount by remember { mutableIntStateOf(3) }
+    var resultEntries by remember { 
+        mutableStateOf(listOf(
+            ResultEntry(0, "당첨", 1),
+            ResultEntry(1, "꽝", 3)
+        )) 
+    }
 
     var players by remember { mutableStateOf(listOf<String>()) }
     var mapping by remember { mutableStateOf(listOf<Pair<String, String>>()) }
@@ -141,10 +157,16 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(playerCount) {
-        if (winnerCount + loserCount > playerCount) {
-            winnerCount = 1
-            loserCount = (playerCount - 1).coerceAtLeast(0)
+    LaunchedEffect(playerCount, resultEntries) {
+        val totalCount = resultEntries.sumOf { it.count }
+        if (totalCount > playerCount) {
+            val diff = totalCount - playerCount
+            if (resultEntries.isNotEmpty()) {
+                val last = resultEntries.last()
+                val newList = resultEntries.toMutableList()
+                newList[resultEntries.size - 1] = last.copy(count = (last.count - diff).coerceAtLeast(0))
+                resultEntries = newList
+            }
         }
     }
 
@@ -163,106 +185,153 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
         scope.launch { scrollState.animateScrollTo(scrollState.maxValue) }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(t.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { showSettings = true }) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings")
-            }
-        }
-
-        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                CounterRow(t.totalPlayers, playerCount, 2, 12) { playerCount = it }
-                CounterRow(t.winners, winnerCount, 0, playerCount - loserCount) { winnerCount = it }
-                CounterRow(t.losers, loserCount, 0, playerCount - winnerCount) { loserCount = it }
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(modifier = Modifier.weight(1f), onClick = {
-                onShowAd {
-                    val p = (1..playerCount).map { it.toString() }
-                    val res = mutableListOf<String>()
-                    repeat(winnerCount) { res.add("WIN") }
-                    repeat(loserCount) { res.add("LOSE") }
-                    repeat(playerCount - winnerCount - loserCount) { res.add("-") }
-                    players = p
-                    mapping = p.zip(res.shuffled(Random(System.currentTimeMillis())))
-                    rungs = generateRungs(p.size, levels, 0.7f, System.currentTimeMillis())
-                    selectedPlayerIndex = 0
-                    trace = emptyList()
-                    animT = 0f
-                    finalLineIndex = -1
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Column(
+            modifier = Modifier.weight(1f).verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(t.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { showSettings = true }) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings")
                 }
-            }) { Text(t.createLadder) }
+            }
 
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = {
-                players = emptyList()
-                mapping = emptyList()
-                finalLineIndex = -1
-            }) { Text(t.reset) }
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CounterRow(t.totalPlayers, playerCount, 2, 12) { playerCount = it }
+                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(t.resultSettings, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    
+                    resultEntries.forEachIndexed { index, entry ->
+                        val othersSum = resultEntries.sumOf { it.count } - entry.count
+                        ResultEntryRow(
+                            entry = entry,
+                            maxCount = playerCount - othersSum,
+                            placeholder = t.inputPlaceholder,
+                            onNameChange = { newName ->
+                                val newList = resultEntries.toMutableList()
+                                newList[index] = entry.copy(name = newName)
+                                resultEntries = newList
+                            },
+                            onCountChange = { newCount ->
+                                val newList = resultEntries.toMutableList()
+                                newList[index] = entry.copy(count = newCount)
+                                resultEntries = newList
+                            },
+                            onDelete = {
+                                if (resultEntries.size > 1) {
+                                    resultEntries = resultEntries.filterIndexed { i, _ -> i != index }
+                                }
+                            }
+                        )
+                    }
+                    
+                    TextButton(
+                        onClick = {
+                            if (resultEntries.size < playerCount) {
+                                resultEntries = resultEntries + ResultEntry(System.currentTimeMillis(), "", 0)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Text(t.addResult)
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(modifier = Modifier.weight(1f), onClick = {
+                    onShowAd {
+                        val p = (1..playerCount).map { it.toString() }
+                        val fullResults = mutableListOf<String>()
+                        resultEntries.forEach { entry ->
+                            repeat(entry.count) { fullResults.add(entry.name) }
+                        }
+                        repeat(playerCount - fullResults.size) { fullResults.add("-") }
+                        
+                        players = p
+                        mapping = p.zip(fullResults.shuffled(Random(System.currentTimeMillis())))
+                        rungs = generateRungs(p.size, levels, 0.7f, System.currentTimeMillis())
+                        selectedPlayerIndex = 0
+                        trace = emptyList()
+                        animT = 0f
+                        finalLineIndex = -1
+                    }
+                }) { Text(t.createLadder) }
+
+                OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                    players = emptyList()
+                    mapping = emptyList()
+                    finalLineIndex = -1
+                }) { Text(t.reset) }
+            }
+
+            if (players.isNotEmpty()) {
+                HorizontalDivider()
+                Text(t.selectStart, style = MaterialTheme.typography.labelLarge)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    itemsIndexed(players) { idx, name ->
+                        FilterChip(
+                            selected = (idx == selectedPlayerIndex),
+                            onClick = { if (!isAnimating) selectedPlayerIndex = idx },
+                            label = { Text("${name}${if(language == Language.KR) "번" else ""}") }
+                        )
+                    }
+                }
+
+                Button(modifier = Modifier.fillMaxWidth(), enabled = !isAnimating, onClick = {
+                    val (tr, end) = computeTraceAndEndLine(selectedPlayerIndex, players.size, levels, rungs)
+                    scope.launch { playAnimation(tr, end) }
+                }) { Text(t.start) }
+
+                LadderGameArea(
+                    modifier = Modifier.height(360.dp).fillMaxWidth(),
+                    players = players,
+                    results = mapping.map { it.second },
+                    rungs = rungs,
+                    levels = levels,
+                    trace = trace,
+                    animT = animT,
+                    highlightPath = isAnimating || finalLineIndex >= 0
+                )
+            }
         }
 
         if (players.isNotEmpty()) {
-            HorizontalDivider()
-            Text(t.selectStart, style = MaterialTheme.typography.labelLarge)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                itemsIndexed(players) { idx, name ->
-                    FilterChip(
-                        selected = (idx == selectedPlayerIndex),
-                        onClick = { if (!isAnimating) selectedPlayerIndex = idx },
-                        label = { Text("${name}${if(language == Language.KR) "번" else ""}") }
-                    )
-                }
-            }
-
-            Button(modifier = Modifier.fillMaxWidth(), enabled = !isAnimating, onClick = {
-                val (tr, end) = computeTraceAndEndLine(selectedPlayerIndex, players.size, levels, rungs)
-                scope.launch { playAnimation(tr, end) }
-            }) { Text(t.start) }
-
-            LadderGameArea(
-                modifier = Modifier.height(360.dp).fillMaxWidth(),
-                players = players,
-                results = mapping.map { if(it.second == "WIN") t.win else if(it.second == "LOSE") t.lose else "-" },
-                rungs = rungs,
-                levels = levels,
-                trace = trace,
-                animT = animT,
-                highlightPath = isAnimating || finalLineIndex >= 0
-            )
-
-            Card(modifier = Modifier.fillMaxWidth().height(80.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth().height(80.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
                 Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                     val statusText = when {
                         isAnimating -> t.statusAnimating
-                        finalLineIndex >= 0 -> {
-                            val key = mapping[finalLineIndex].second
-                            t.resultPrefix + (if(key == "WIN") t.win else if(key == "LOSE") t.lose else "-")
-                        }
+                        finalLineIndex >= 0 -> t.resultPrefix + mapping[finalLineIndex].second
                         else -> t.statusIdle
                     }
                     Text(statusText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
     if (showSettings) {
+        val context = LocalContext.current
+        val currentVersion = remember {
+            try {
+                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                packageInfo.versionName ?: "1.0"
+            } catch (e: Exception) { "1.0" }
+        }
+
         AlertDialog(
             onDismissRequest = { showSettings = false },
             title = { Text(t.settings) },
             text = {
                 Column {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(t.versionInfo, style = MaterialTheme.typography.labelMedium)
-                    Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
                     Text(t.selectLang, style = MaterialTheme.typography.labelMedium)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = language == Language.KR, onClick = { language = Language.KR })
@@ -271,10 +340,54 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
                         RadioButton(selected = language == Language.EN, onClick = { language = Language.EN })
                         Text("English", modifier = Modifier.clickable { language = Language.EN })
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(t.versionInfo, style = MaterialTheme.typography.labelMedium)
+                    Text("Version $currentVersion", style = MaterialTheme.typography.bodyLarge)
                 }
             },
             confirmButton = { TextButton(onClick = { showSettings = false }) { Text(t.close) } }
         )
+    }
+}
+
+@Composable
+fun ResultEntryRow(
+    entry: ResultEntry,
+    maxCount: Int,
+    placeholder: String,
+    onNameChange: (String) -> Unit,
+    onCountChange: (Int) -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value = entry.name,
+            onValueChange = onNameChange,
+            modifier = Modifier.weight(1f),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            singleLine = true,
+            placeholder = { Text(placeholder) }
+        )
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { if (entry.count > 0) onCountChange(entry.count - 1) }, modifier = Modifier.size(32.dp)) {
+                Text("-", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            }
+            Text(entry.count.toString(), modifier = Modifier.widthIn(min = 20.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+            IconButton(onClick = { if (entry.count < maxCount) onCountChange(entry.count + 1) }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            }
+        }
+        
+        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+        }
     }
 }
 
@@ -286,7 +399,7 @@ fun CounterRow(label: String, value: Int, min: Int, max: Int, onValueChange: (In
             IconButton(onClick = { if (value > min) onValueChange(value - 1) }) {
                 Text("-", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             }
-            Text(value.toString(), modifier = Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            Text(text = value.toString(), modifier = Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             IconButton(onClick = { if (value < max) onValueChange(value + 1) }) {
                 Icon(Icons.Default.Add, contentDescription = null)
             }
@@ -376,8 +489,9 @@ private fun computeTraceAndEndLine(startLine: Int, lines: Int, levels: Int, rung
     val trace = mutableListOf(TracePoint(x, 0))
     for (y in 1..levels) {
         trace.add(TracePoint(x, y))
-        val moveRight = (rungMap[y] ?: emptyList()).any { it.leftLine == x }
-        val moveLeft = (rungMap[y] ?: emptyList()).any { it.leftLine == x - 1 }
+        val rungsHere = rungMap[y] ?: emptyList()
+        val moveRight = rungsHere.any { it.leftLine == x }
+        val moveLeft = rungsHere.any { it.leftLine == x - 1 }
         val newX = when {
             moveRight && x < lines - 1 -> x + 1
             moveLeft && x > 0 -> x - 1

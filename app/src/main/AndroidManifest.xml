@@ -17,9 +17,11 @@
         android:theme="@style/Theme.SimpleLadder">
 
         <!-- AdMob App ID (Test) -->
+        <!-- Sample AdMob app ID: ca-app-pub-3940256099942544~3347511713
+        ca-app-pub-8469540863370531~6592484883-->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ca-app-pub-8469540863370531~6592484883"/>
 
         <activity
             android:name=".MainActivity"
