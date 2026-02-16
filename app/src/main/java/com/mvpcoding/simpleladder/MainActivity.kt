@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
         val adRequest = AdRequest.Builder().build()
         
         // 구글 공식 테스트 전면광고 ID
-        InterstitialAd.load(this, "ca-app-pub-3940256099942544/1033173712", adRequest, object : InterstitialAdLoadCallback() {
+        InterstitialAd.load(this, "ca-app-pub-8469540863370531/8151805108", adRequest, object : InterstitialAdLoadCallback() {
             override fun onAdFailedToLoad(adError: LoadAdError) {
                 interstitialAd = null
                 isAdLoading = false
