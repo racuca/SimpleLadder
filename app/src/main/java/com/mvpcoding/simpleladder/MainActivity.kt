@@ -1,5 +1,6 @@
 package com.mvpcoding.simpleladder
 
+import android.content.Context
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -47,7 +48,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // AdMob 초기화
         MobileAds.initialize(this) { loadInterstitialAd() }
 
         setContent {
@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
         val adRequest = AdRequest.Builder().build()
         
         // 구글 공식 테스트 전면광고 ID
-        InterstitialAd.load(this, "ca-app-pub-8469540863370531/8151805108", adRequest, object : InterstitialAdLoadCallback() {
+        InterstitialAd.load(this, "ca-app-pub-3940256099942544/1033173712", adRequest, object : InterstitialAdLoadCallback() {
             override fun onAdFailedToLoad(adError: LoadAdError) {
                 interstitialAd = null
                 isAdLoading = false
@@ -130,7 +130,14 @@ data class TracePoint(val xLine: Int, val yIndex: Int)
 
 @Composable
 fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
-    var language by remember { mutableStateOf(Language.KR) }
+    val context = LocalContext.current
+    val sharedPrefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    
+    // 저장된 언어 불러오기 (없으면 KR 기본)
+    var language by remember { 
+        mutableStateOf(Language.valueOf(sharedPrefs.getString("lang", Language.KR.name) ?: Language.KR.name)) 
+    }
+    
     val t = remember(language) { Translation(language) }
     var showSettings by remember { mutableStateOf(false) }
 
@@ -319,11 +326,9 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
     }
 
     if (showSettings) {
-        val context = LocalContext.current
         val currentVersion = remember {
             try {
-                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                packageInfo.versionName ?: "1.0"
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
             } catch (e: Exception) { "1.0" }
         }
 
@@ -334,11 +339,29 @@ fun LadderGameStage2Screen(onShowAd: (() -> Unit) -> Unit) {
                 Column {
                     Text(t.selectLang, style = MaterialTheme.typography.labelMedium)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = language == Language.KR, onClick = { language = Language.KR })
-                        Text("한국어", modifier = Modifier.clickable { language = Language.KR })
+                        RadioButton(
+                            selected = language == Language.KR,
+                            onClick = { 
+                                language = Language.KR 
+                                sharedPrefs.edit().putString("lang", Language.KR.name).apply()
+                            }
+                        )
+                        Text("한국어", modifier = Modifier.clickable { 
+                            language = Language.KR 
+                            sharedPrefs.edit().putString("lang", Language.KR.name).apply()
+                        })
                         Spacer(modifier = Modifier.width(20.dp))
-                        RadioButton(selected = language == Language.EN, onClick = { language = Language.EN })
-                        Text("English", modifier = Modifier.clickable { language = Language.EN })
+                        RadioButton(
+                            selected = language == Language.EN,
+                            onClick = { 
+                                language = Language.EN 
+                                sharedPrefs.edit().putString("lang", Language.EN.name).apply()
+                            }
+                        )
+                        Text("English", modifier = Modifier.clickable { 
+                            language = Language.EN 
+                            sharedPrefs.edit().putString("lang", Language.EN.name).apply()
+                        })
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider()
@@ -362,7 +385,7 @@ fun ResultEntryRow(
     onDelete: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -374,7 +397,6 @@ fun ResultEntryRow(
             singleLine = true,
             placeholder = { Text(placeholder) }
         )
-        
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { if (entry.count > 0) onCountChange(entry.count - 1) }, modifier = Modifier.size(32.dp)) {
                 Text("-", fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -384,7 +406,6 @@ fun ResultEntryRow(
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             }
         }
-        
         IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
         }
